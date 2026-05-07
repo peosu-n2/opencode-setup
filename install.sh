@@ -32,7 +32,7 @@ link_safe() {
 if command -v pacman >/dev/null; then
   echo "→ Arch detected; installing deps via pacman"
   sudo pacman -S --needed --noconfirm \
-    bubblewrap jq fd ripgrep bat dasel xh skopeo \
+    bubblewrap jq fd ripgrep bat dasel xh \
     github-cli docker docker-buildx \
     grim slurp wl-clipboard imagemagick \
     nodejs npm
@@ -40,13 +40,13 @@ elif command -v apt-get >/dev/null; then
   echo "→ Debian/Ubuntu detected; installing deps via apt"
   sudo apt-get update
   sudo apt-get install -y \
-    bubblewrap jq fd-find ripgrep bat dasel skopeo \
+    bubblewrap jq fd-find ripgrep bat dasel \
     gh docker.io docker-buildx \
     grim slurp wl-clipboard imagemagick \
     nodejs npm
   command -v fd >/dev/null || sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 else
-  echo "✗ unsupported distro; install manually: bubblewrap jq fd ripgrep bat dasel xh skopeo gh docker imagemagick grim slurp wl-clipboard nodejs npm"
+  echo "✗ unsupported distro; install manually: bubblewrap jq fd ripgrep bat dasel xh gh docker imagemagick grim slurp wl-clipboard nodejs npm"
   exit 1
 fi
 
