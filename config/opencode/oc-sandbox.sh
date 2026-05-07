@@ -11,7 +11,7 @@
 #   - ~/.gradle (build cache + daemon — avoids re-downloading on every build)
 #   - ~/.m2 (Maven local repo, used by Gradle for mavenLocal())
 # Visible read-only inside:
-#   - /usr, /etc, /opt, ~/.libs, ~/.python-environments, ~/.pyenv
+#   - /usr, /etc, /opt, ~/.libs
 #   - ~/.ssh (for git push via SSH)
 #   - ~/.gitconfig
 #   - ~/.docker (config.json — registry auth for docker push)
@@ -92,8 +92,6 @@ exec bwrap \
   --ro-bind "$HOME/.libs" "$HOME/.libs" \
   --bind "$HOME/.bin" "$HOME/.bin" \
   --bind-try "$HOME/.opencode" "$HOME/.opencode" \
-  --ro-bind "$HOME/.python-environments" "$HOME/.python-environments" \
-  --ro-bind "$HOME/.pyenv" "$HOME/.pyenv" \
   --bind "$HOME/.config/opencode" "$HOME/.config/opencode" \
   --ro-bind "$HOME/.config/opencode/config.sandbox.json" "$HOME/.config/opencode/config.json" \
   --bind "$HOME/.local/share/opencode" "$HOME/.local/share/opencode" \

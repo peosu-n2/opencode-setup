@@ -16,7 +16,7 @@ Available: `dasel`, `jq`, `yq`, `sd`, `rg`, `fd`, `bat`, `xh`, `curl`, `tidy`. A
 
 ## Common Mistake Prevention Rules
 1. **NEVER edit JSON/YAML files manually** - Use `jq` or `yq` commands
-2. **NEVER use bare `python`/`python3`** - Activate the project venv first (or use a project-specific wrapper like `python-project`)
+2. **NEVER use bare `python`/`python3`** - Activate the project venv first (or use `uv run` / `poetry run` / similar wrapper)
 3. **ALWAYS check Docker status** before running Docker commands
 4. **ALWAYS preview Git changes** before committing
 5. **USE project-specific commands** from `package.json`/`pyproject.toml`
@@ -28,7 +28,7 @@ Available: `dasel`, `jq`, `yq`, `sd`, `rg`, `fd`, `bat`, `xh`, `curl`, `tidy`. A
 
 ## Python environment rule
 - **ALWAYS** install/run Python through the project venv or a project-aware wrapper, never bare `python`/`pip`.
-- If you have a tool like `python-project` (a wrapper that resolves the right env per directory), document it here and require its use. Otherwise: `source .venv/bin/activate` first, or use `uv run`/`poetry run`/etc.
+- Use `uv run` / `poetry run` / a project-specific wrapper, or `source .venv/bin/activate` first.
 - Goal: scratch installs go into a known env, not the system Python and not ad-hoc temp venvs.
 
 
