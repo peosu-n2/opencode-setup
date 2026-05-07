@@ -8,6 +8,26 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 echo "→ installing from $REPO"
 echo "→ user=$USER home=$HOME"
 
+# Safely create a symlink; back up any existing real file/dir
+link_safe() {
+  local src="$1" dst="$2"
+  if [ -L "$dst" ]; then
+    # already a symlink — quietly replace
+    ln -sfn "$src" "$dst"
+  elif [ -e "$dst" ]; then
+    # real file/dir — back up first
+    local bak="${dst}.bak.$(date +%Y%m%d-%H%M%S)"
+    mv "$dst" "$bak"
+    ln -s "$src" "$dst"
+    echo "  ↳ backed up existing $(basename "$dst") to $(basename "$bak")"
+  else
+    # absent
+    mkdir -p "$(dirname "$dst")"
+    ln -s "$src" "$dst"
+  fi
+}
+
+
 # === 1. System deps ===
 if command -v pacman >/dev/null; then
   echo "→ Arch detected; installing deps via pacman"
@@ -31,25 +51,26 @@ else
 fi
 
 # === 2. opencode binary ===
-if [ ! -x "$HOME/.opencode/bin/opencode" ]; then
-  echo "→ installing opencode"
+if ! command -v opencode >/dev/null && [ ! -x "$HOME/.opencode/bin/opencode" ]; then
+  echo "→ installing opencode (not found on PATH)"
   curl -fsSL https://opencode.ai/install | bash
+else
+  echo "→ opencode already present at $(command -v opencode || echo "$HOME/.opencode/bin/opencode")"
 fi
 
 # === 3. ~/.bin (symlink each oc-* script) ===
 mkdir -p "$HOME/.bin"
 for f in "$REPO"/bin/*; do
-  base=$(basename "$f")
-  ln -sfn "$f" "$HOME/.bin/$base"
+  link_safe "$f" "$HOME/.bin/$(basename "$f")"
 done
 echo "→ symlinked ~/.bin/oc-* (count: $(ls -1 "$REPO"/bin/ | wc -l))"
 
 # === 4. ~/.config/opencode (symlink config files individually) ===
 mkdir -p "$HOME/.config/opencode"
 for f in config.json oc-sandbox.sh AGENTS.md aliases.sh package.json package-lock.json; do
-  ln -sfn "$REPO/config/opencode/$f" "$HOME/.config/opencode/$f"
+  link_safe "$REPO/config/opencode/$f" "$HOME/.config/opencode/$f"
 done
-ln -sfn "$REPO/config/opencode/plugins" "$HOME/.config/opencode/plugins"
+link_safe "$REPO/config/opencode/plugins" "$HOME/.config/opencode/plugins"
 
 # Install plugin npm deps
 if [ -f "$HOME/.config/opencode/package.json" ]; then
@@ -59,8 +80,7 @@ fi
 # === 5. systemd user services ===
 mkdir -p "$HOME/.config/systemd/user"
 for f in "$REPO"/systemd/user/*.service; do
-  base=$(basename "$f")
-  ln -sfn "$f" "$HOME/.config/systemd/user/$base"
+  link_safe "$f" "$HOME/.config/systemd/user/$(basename "$f")"
 done
 systemctl --user daemon-reload
 for f in "$REPO"/systemd/user/*.service; do
