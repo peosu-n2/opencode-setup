@@ -1,0 +1,32 @@
+#!/bin/bash
+# Locate playwright-mcp wherever it's installed on this machine, then exec it
+# with the standard host-side args.
+set -euo pipefail
+
+EXE=""
+for candidate in \
+    "$(command -v playwright-mcp 2>/dev/null || true)" \
+    "$HOME/.libs/node22/bin/playwright-mcp" \
+    "$HOME/.local/bin/playwright-mcp" \
+    "$HOME/.npm-global/bin/playwright-mcp" \
+    "/usr/local/bin/playwright-mcp"; do
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+    EXE="$candidate"; break
+  fi
+done
+
+if [ -z "$EXE" ]; then
+  echo "oc-playwright-mcp: playwright-mcp not found." >&2
+  echo "  install with: npm install -g @playwright/mcp" >&2
+  exit 1
+fi
+
+mkdir -p "$HOME/.cache/oc-playwright-profile"
+
+exec "$EXE" \
+  --host 127.0.0.1 \
+  --port 3100 \
+  --allowed-hosts '*' \
+  --browser chromium \
+  --user-data-dir "$HOME/.cache/oc-playwright-profile" \
+  "$@"

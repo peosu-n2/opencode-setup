@@ -65,16 +65,6 @@
     }
   },
   "mcp": {
-    "postgres": {
-      "type": "local",
-      "enabled": false,
-      "command": [
-        "npx",
-        "-y",
-        "@modelcontextprotocol/server-postgres",
-        "postgresql://postgres:postgres@localhost:5432/jna_data"
-      ]
-    },
     "github": {
       "type": "local",
       "enabled": true,
