@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""
+Pretty-print opencode's JSON event stream so tool I/O is visually distinct
+from agent narration.
+
+Reads JSON-line events on stdin (from `oc run --format json`) and writes
+ANSI-colored output to stdout.
+
+Color scheme (256-color where supported, fallback to 16-color):
+  - tool header  : bright cyan bold      (tool name + command)
+  - tool output  : dim grey               (the result; also slightly indented)
+  - agent text   : default terminal color (bright, the model's words)
+  - footer hint  : faint cyan italic      (cost, tokens, step boundaries)
+  - error        : red                    (errors, failures)
+
+Use via the `ocr` wrapper, or directly:
+    oc run --format json --agent build "..." | oc-pretty
+"""
+import json
+import sys
+import textwrap
+
+# ANSI codes (work in any modern terminal)
+RESET = "\x1b[0m"
+DIM = "\x1b[2m"
+BOLD = "\x1b[1m"
+ITALIC = "\x1b[3m"
+CYAN = "\x1b[36m"
+CYAN_BRIGHT = "\x1b[96m"
+GREY = "\x1b[38;5;240m"
+RED = "\x1b[31m"
+GREEN = "\x1b[32m"
+YELLOW = "\x1b[33m"
+
+
+def is_tty() -> bool:
+    return sys.stdout.isatty()
+
+
+def c(text: str, *codes: str) -> str:
+    """Wrap text in ANSI codes if writing to a TTY, else passthrough."""
+    if not is_tty():
+        return text
+    return "".join(codes) + text + RESET
+
+
+def fmt_tool_header(tool: str, input_data: dict) -> str:
+    """Render a one-line header for a tool call."""
+    if tool == "bash":
+        cmd = input_data.get("command", "")
+        # Truncate long commands to single line
+        if len(cmd) > 200:
+            cmd = cmd[:197] + "..."
+        # Compress newlines
+        cmd = cmd.replace("\n", " ⏎ ")
+        return c(f"╭─ {tool}", CYAN_BRIGHT, BOLD) + c(f" {cmd}", CYAN)
+    elif tool in ("read", "write", "edit"):
+        path = input_data.get("filePath", input_data.get("path", "?"))
+        return c(f"╭─ {tool}", CYAN_BRIGHT, BOLD) + c(f" {path}", CYAN)
+    elif tool in ("glob", "grep"):
+        pat = input_data.get("pattern", "?")
+        path = input_data.get("path", "")
+        return c(f"╭─ {tool}", CYAN_BRIGHT, BOLD) + c(f" {pat} {path}".rstrip(), CYAN)
+    elif tool == "task":
+        agent = input_data.get("subagent_type", input_data.get("agent", "?"))
+        desc = input_data.get("description", "")
+        return c(f"╭─ task → @{agent}", CYAN_BRIGHT, BOLD) + c(f" {desc}", CYAN)
+    else:
+        # Generic — show the input compactly
+        compact = json.dumps(input_data, separators=(",", ":"))
+        if len(compact) > 200:
+            compact = compact[:197] + "..."
+        return c(f"╭─ {tool}", CYAN_BRIGHT, BOLD) + c(f" {compact}", CYAN)
+
+
+def fmt_tool_output(output: str, max_lines: int = 30) -> str:
+    """Render tool output dimmed and slightly indented; cap line count."""
+    if not output:
+        return c("│  (no output)", GREY, DIM)
+    lines = output.rstrip("\n").split("\n")
+    truncated = False
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        truncated = True
+    out = []
+    for ln in lines:
+        out.append(c("│  ", GREY) + c(ln, GREY, DIM))
+    if truncated:
+        out.append(c(f"│  … ({len(output.rstrip().split(chr(10)))-max_lines} more lines truncated)", GREY, DIM, ITALIC))
+    out.append(c("╰─", GREY))
+    return "\n".join(out)
+
+
+def handle_event(ev: dict) -> None:
+    t = ev.get("type", "")
+    part = ev.get("part", {})
+
+    if t == "tool_use":
+        tool = part.get("tool", "?")
+        state = part.get("state", {})
+        input_data = state.get("input") or {}
+        output = state.get("output") or ""
+        status = state.get("status", "")
+        sys.stdout.write(fmt_tool_header(tool, input_data) + "\n")
+        if status == "completed" or output:
+            sys.stdout.write(fmt_tool_output(output) + "\n")
+        elif status == "error":
+            sys.stdout.write(c(f"│  ERROR: {output[:300]}", RED) + "\n" + c("╰─", RED) + "\n")
+
+    elif t == "text":
+        text = part.get("text", "").rstrip()
+        if text:
+            sys.stdout.write(text + "\n")
+
+    elif t == "step_finish":
+        reason = part.get("reason", "")
+        cost = part.get("cost", 0)
+        tok = part.get("tokens", {})
+        in_t = tok.get("input", 0)
+        out_t = tok.get("output", 0)
+        cache = tok.get("cache", {}).get("read", 0)
+        if reason and reason != "stop":
+            sys.stdout.write(
+                c(
+                    f"  · step end: {reason}  "
+                    f"·  in:{in_t} out:{out_t} cache:{cache}  ·  ${cost:.4f}",
+                    GREY, ITALIC,
+                ) + "\n"
+            )
+
+    elif t == "step_start":
+        pass  # silent — clutter
+
+    sys.stdout.flush()
+
+
+def main() -> int:
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            sys.stdout.write(line + "\n")
+            continue
+        try:
+            handle_event(ev)
+        except Exception as e:
+            sys.stdout.write(c(f"[oc-pretty] render error: {e}", RED) + "\n")
+            sys.stdout.write(line + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

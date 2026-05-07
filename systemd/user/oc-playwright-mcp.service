@@ -1,0 +1,12 @@
+[Unit]
+Description=playwright-mcp on host for opencode (visible browser windows)
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.libs/node22/bin/playwright-mcp --host 127.0.0.1 --port 3100 --allowed-hosts '*' --browser chromium --executable-path /usr/bin/chromium --user-data-dir %h/.cache/oc-playwright-profile
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,7 @@
+{
+  "auths": {
+    "ghcr.io": {
+      "auth": "BASE64-OF-username:gh-personal-access-token-with-write:packages"
+    }
+  }
+}

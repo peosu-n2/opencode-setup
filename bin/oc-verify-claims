@@ -1,0 +1,90 @@
+#!/bin/bash
+# Verify file:line claims and quoted snippets in a markdown analysis doc.
+#
+# Usage: oc-verify-claims <analysis.md> [project-root]
+#
+# Walks the doc looking for:
+#   - `path/to/file.ext`        → file existence check
+#   - `path/to/file.ext:NN`     → file existence + line number bounds check
+#   - "verbatim quote..."       → grep against project for the quote
+#
+# Marks each ✓ / ✗. Flags claims worth re-reading the source for.
+set -eu
+
+if [ $# -lt 1 ]; then
+  echo "usage: oc-verify-claims <analysis.md> [project-root]" >&2
+  exit 1
+fi
+
+DOC="$1"
+ROOT="${2:-$(pwd)}"
+
+if [ ! -f "$DOC" ]; then echo "no such file: $DOC" >&2; exit 1; fi
+if [ ! -d "$ROOT" ]; then echo "no such dir:  $ROOT" >&2; exit 1; fi
+
+echo "Verifying claims in: $DOC"
+echo "Against project:     $ROOT"
+echo "---"
+
+ok=0; bad=0
+
+# 1. file:line claims (e.g. `services/event_handler.py:54`)
+grep -oE '`[A-Za-z0-9_./-]+\.(py|ts|tsx|js|jsx|go|rs|java|yaml|yml|json|md|sh|toml|sql)(:[0-9]+(-[0-9]+)?)?`' "$DOC" \
+  | sort -u | while IFS= read -r claim; do
+    raw=$(echo "$claim" | tr -d '`')
+    file="${raw%%:*}"
+    rest="${raw#*:}"
+    abs="$ROOT/$file"
+
+    if [ ! -e "$abs" ]; then
+      printf '  ✗ %s — file MISSING\n' "$claim"
+      continue
+    fi
+
+    if [ "$rest" != "$file" ]; then
+      # has :N or :N-M
+      end="${rest##*-}"
+      lines=$(wc -l < "$abs")
+      if [ "$end" -gt "$lines" ]; then
+        printf '  ✗ %s — line out of range (file has %d lines)\n' "$claim" "$lines"
+      else
+        printf '  ✓ %s\n' "$claim"
+      fi
+    else
+      printf '  ✓ %s — file exists\n' "$claim"
+    fi
+done
+
+echo "--- identifier checks (backtick-quoted strings that look like service/var/path names) ---"
+
+# Resolve absolute path of the doc so we can exclude self-references.
+DOC_ABS=$(realpath "$DOC")
+
+# Extract `identifier_like_this` from backticks. Filter for length >= 8 and no path/extension/special chars.
+# Then rg the project for each, excluding the analysis doc itself + obvious noise (logs, .git).
+# Show which files the identifier appears in — if it only shows up in session notes / docs, that's a smell.
+grep -oE '`[a-zA-Z_][a-zA-Z0-9_-]{7,}`' "$DOC" \
+  | tr -d '`' \
+  | grep -vE '\.(py|ts|js|yaml|yml|json|sh|toml|md|sql|html)$' \
+  | sort -u | while IFS= read -r ident; do
+    hits=$(rg -l --no-messages -F "$ident" "$ROOT" 2>/dev/null \
+      | grep -v -F "$DOC_ABS" \
+      | grep -vE '\.git/|/node_modules/|\.log$' || true)
+    if [ -z "$hits" ]; then
+      printf '  ✗ %s — NOT FOUND in project (possible hallucination)\n' "$ident"
+    else
+      n=$(echo "$hits" | wc -l)
+      first=$(echo "$hits" | head -2 | sed "s|$ROOT/||" | tr '\n' ',' | sed 's/,$//')
+      if [ "$n" -le 2 ] && echo "$hits" | grep -qiE '/session|/docs?/|README|HISTORY|CHANGELOG'; then
+        printf '  ⚠ %s — appears only in docs/notes (%s) — verify the code-level claim manually\n' "$ident" "$first"
+      else
+        printf '  ✓ %s — appears in %d file(s): %s\n' "$ident" "$n" "$first"
+      fi
+    fi
+done
+
+echo "---"
+echo "Notes:"
+echo "  - File:line marks check existence + bounds, not snippet content."
+echo "  - Identifier check uses string match, so common words may false-positive (✓ doesn't mean correct, just present)."
+echo "  - For maximum confidence, run the analysis through 'oc run --agent ship' so the reviewer pass cross-checks each claim."

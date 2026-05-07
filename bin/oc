@@ -1,0 +1,8 @@
+#!/bin/bash
+# Sandboxed opencode launcher. Routes everything through oc-sandbox.sh,
+# which auto-regenerates config.sandbox.json from config.json on every run
+# and confines opencode to: $PWD, ~/projects, ~/Desktop, ~/.bin (RW);
+# ~/.ssh, ~/.gitconfig (RO).
+#
+# To bypass the sandbox in an emergency: $HOME/.libs/node22/bin/opencode "$@"
+exec $HOME/.config/opencode/oc-sandbox.sh "$@"

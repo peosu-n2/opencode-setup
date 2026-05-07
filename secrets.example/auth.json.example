@@ -1,0 +1,5 @@
+{
+  "deepseek": { "type": "api", "key": "sk-deepseek-replace-me" },
+  "openrouter": { "type": "api", "key": "sk-or-replace-me" },
+  "anthropic": { "type": "api", "key": "sk-ant-replace-me" }
+}

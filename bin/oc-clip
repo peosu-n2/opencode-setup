@@ -1,0 +1,31 @@
+#!/bin/bash
+# Pipe clipboard image (PNG) into a vision model via OpenRouter.
+# Calls oc-see directly (bypassing opencode's vision pipeline, which currently
+# can't pass images through the openai-compatible adapter for non-OpenAI providers).
+#
+# Usage:
+#   oc-clip [prompt]
+#
+# Requires wl-paste (Wayland). For X11, swap to xclip -selection clipboard -t image/png -o.
+set -eu
+
+if ! command -v wl-paste >/dev/null 2>&1; then
+  echo "oc-clip: wl-paste not found. Install wl-clipboard." >&2
+  exit 1
+fi
+
+if ! wl-paste --list-types 2>/dev/null | grep -q '^image/png$'; then
+  echo "oc-clip: clipboard does not contain a PNG image." >&2
+  echo "         Take a screenshot or copy an image to the clipboard first." >&2
+  exit 1
+fi
+
+mkdir -p $HOME/.cache/opencode
+tmp=$(mktemp $HOME/.cache/opencode/oc-clip-XXXXXX.png)
+trap 'rm -f "$tmp"' EXIT
+
+wl-paste --type image/png > "$tmp"
+
+prompt="${1:-Describe this image in detail. Quote any visible text verbatim. Identify error messages, UI states, or anomalies.}"
+
+exec $HOME/.bin/oc-see "$tmp" "$prompt"

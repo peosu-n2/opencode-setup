@@ -1,0 +1,14 @@
+[Unit]
+Description=opencode host-side desktop proxy (clipboard + screenshot)
+Documentation=file://%h/.bin/oc-host-proxy
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.bin/oc-host-proxy
+Restart=on-failure
+RestartSec=3
+# Inherits the user's session env (WAYLAND_DISPLAY, XDG_RUNTIME_DIR) by default.
+
+[Install]
+WantedBy=default.target

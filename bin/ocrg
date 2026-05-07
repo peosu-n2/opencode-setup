@@ -1,0 +1,6 @@
+#!/bin/bash
+# Sandboxed `opencode run`, output piped through glow (softer prose styling).
+# Same ANSI-stripping + tool-call indicator fix as ocr.
+$HOME/.config/opencode/oc-sandbox.sh run "$@" 2>&1 \
+  | sed -E 's/\x1b\[[0-9;]*m//g; s/^(\s*)\|\s+(Read|Write|Edit|Bash|Glob|Grep|List|Todo|Task|Patch|Skill|Webfetch|Websearch|Lsp|Codesearch)\s+(.*)$/\1> **\2** \3/' \
+  | glow -

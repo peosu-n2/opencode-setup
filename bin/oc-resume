@@ -1,0 +1,32 @@
+#!/bin/bash
+# Resume an opencode session by slug or title fragment.
+# Usage:
+#   oc-resume curious-panda
+#   oc-resume "nebius factory"
+#   oc-resume                  # most recently updated session
+#
+# Greps the session storage, picks the most recently-updated match, opens TUI.
+set -eu
+
+SESSION_DIR=$HOME/.local/share/opencode/storage/session/global
+q="${1:-}"
+
+if [ -z "$q" ]; then
+  # No arg → most recent session
+  match=$(ls -t "$SESSION_DIR"/*.json 2>/dev/null | head -1 | xargs -I{} jq -r '.id' {} 2>/dev/null)
+else
+  match=$(jq -r --arg q "$q" \
+    'select((.slug // "" | test($q;"i")) or (.title // "" | test($q;"i"))) | "\(.time.updated) \(.id)"' \
+    "$SESSION_DIR"/*.json 2>/dev/null \
+    | sort -rn | head -1 | awk '{print $2}')
+fi
+
+if [ -z "$match" ]; then
+  echo "oc-resume: no session matching: $q" >&2
+  echo "  Recent sessions:" >&2
+  ls -t "$SESSION_DIR"/*.json 2>/dev/null | head -5 \
+    | xargs -I{} jq -r '"    \(.slug // "?") — \(.title // "?")"' {} >&2
+  exit 1
+fi
+
+exec $HOME/.bin/oc -s "$match"

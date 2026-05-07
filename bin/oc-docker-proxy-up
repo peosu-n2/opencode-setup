@@ -1,0 +1,39 @@
+#!/bin/bash
+# Recreates oc-docker-proxy with the tightened env allowlist.
+# Allows: docker build, push, pull, ps, logs, inspect, events, info, version
+# Denies: docker run, exec, login (AUTH), volume/network create, start/stop/restart
+set -euo pipefail
+docker rm -f oc-docker-proxy 2>/dev/null || true
+docker run -d \
+  --name oc-docker-proxy \
+  --restart unless-stopped \
+  -p 127.0.0.1:2375:2375 \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -e BUILD=1 \
+  -e IMAGES=1 \
+  -e CONTAINERS=1 \
+  -e INFO=1 \
+  -e PING=1 \
+  -e VERSION=1 \
+  -e EVENTS=1 \
+  -e SESSION=1 \
+  -e GRPC=1 \
+  -e POST=1 \
+  -e VOLUMES=0 \
+  -e NETWORKS=0 \
+  -e EXEC=0 \
+  -e COMMIT=0 \
+  -e AUTH=0 \
+  -e DISTRIBUTION=0 \
+  -e NODES=0 \
+  -e PLUGINS=0 \
+  -e SECRETS=0 \
+  -e SERVICES=0 \
+  -e SWARM=0 \
+  -e SYSTEM=0 \
+  -e TASKS=0 \
+  -e CONFIGS=0 \
+  -e ALLOW_RESTARTS=0 \
+  -e ALLOW_STOP=0 \
+  -e ALLOW_START=0 \
+  tecnativa/docker-socket-proxy

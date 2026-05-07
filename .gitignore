@@ -1,0 +1,19 @@
+# auto-generated
+config/opencode/config.sandbox.json
+config/opencode/config.json.bak.*
+config/opencode/error.png
+config/opencode/node_modules/
+
+# secrets — never commit
+secrets/
+*.key
+*.pem
+auth.json
+.docker/
+
+# os/editor
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

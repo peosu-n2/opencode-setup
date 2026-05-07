@@ -1,0 +1,13 @@
+#!/bin/bash
+# Drag-select a screen region, send to vision model, print description.
+# Usage: oc-shot [prompt]
+set -eu
+mkdir -p $HOME/.cache/opencode
+tmp=$(mktemp $HOME/.cache/opencode/oc-shot-XXXXXX.png)
+trap 'rm -f "$tmp"' EXIT
+
+region=$(slurp 2>/dev/null) || { echo "oc-shot: cancelled" >&2; exit 1; }
+grim -g "$region" "$tmp"
+
+prompt="${1:-Describe this image in detail. Quote any visible text verbatim. Identify error messages, UI states, or anomalies.}"
+exec $HOME/.bin/oc-see "$tmp" "$prompt"

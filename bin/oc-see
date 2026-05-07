@@ -1,0 +1,151 @@
+#!/bin/bash
+# Send an image + prompt to a vision model via OpenRouter, print the text response.
+#
+# Bypasses opencode's vision pipeline (which currently drops image content for
+# non-OpenAI providers in @ai-sdk/openai-compatible). This wrapper does the right
+# OpenAI-vision request shape directly.
+#
+# Usage:
+#   oc-see [OPTIONS] <image-path> [prompt]
+#
+# Options:
+#   --model auto|small|medium|large|<full-id>
+#       auto    (default) pick by image pixel count: <500K → 8B, <4M → 32B, else 235B
+#       small   force qwen/qwen3-vl-8b-instruct
+#       medium  force qwen/qwen3-vl-32b-instruct
+#       large   force qwen/qwen3-vl-235b-a22b-instruct
+#       <id>    any OpenRouter model id, e.g. qwen/qwen-vl-max
+#   --tokens N    max output tokens (default 1500)
+#   --inspect     print the routing decision and exit; do NOT call the model
+#
+# Env overrides:
+#   OC_VISION_MODEL  default model when --model is not set (lowest precedence
+#                    after the auto heuristic; explicit --model wins)
+#   OC_VISION_TOKENS default for --tokens
+#
+# Examples:
+#   oc-see screenshot.png "describe"
+#   oc-see --model large screenshot.png "transcribe every line of code visible"
+#   oc-see --inspect screenshot.png
+set -eu
+
+MODEL_8B=qwen/qwen3-vl-8b-instruct
+MODEL_32B=qwen/qwen3-vl-32b-instruct
+MODEL_235B=qwen/qwen3-vl-235b-a22b-instruct
+
+MODEL_ARG=""
+TOKENS_ARG=""
+INSPECT=0
+
+# Parse flags
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model) MODEL_ARG="$2"; shift 2 ;;
+    --model=*) MODEL_ARG="${1#--model=}"; shift ;;
+    --tokens) TOKENS_ARG="$2"; shift 2 ;;
+    --tokens=*) TOKENS_ARG="${1#--tokens=}"; shift ;;
+    --inspect) INSPECT=1; shift ;;
+    --help|-h)
+      sed -n '2,/^set -eu/p' "$0" | sed 's/^# \?//;/^$/d;/^set -eu/d' >&2
+      exit 0
+      ;;
+    --) shift; break ;;
+    -*) echo "oc-see: unknown flag: $1" >&2; exit 1 ;;
+    *) break ;;
+  esac
+done
+
+if [ $# -lt 1 ]; then
+  echo "usage: oc-see [--model TIER|ID] [--tokens N] [--inspect] <image-path> [prompt]" >&2
+  exit 1
+fi
+
+IMG="$1"
+PROMPT="${2:-Describe this image in detail. Quote any visible text verbatim. Identify error messages, UI states, or anomalies. If uncertain about something, say so explicitly.}"
+
+if [ ! -f "$IMG" ]; then
+  echo "oc-see: file not found: $IMG" >&2
+  exit 1
+fi
+
+MIME=$(file --mime-type -b "$IMG")
+case "$MIME" in
+  image/png|image/jpeg|image/webp|image/gif) ;;
+  *) echo "oc-see: unsupported image type: $MIME (path=$IMG)" >&2; exit 1 ;;
+esac
+
+# Pixel count for the auto heuristic. Compute w×h in shell to avoid `identify`'s
+# scientific-notation output (`%[fx:w*h]` returns `2.07e+06` for big images, which
+# bash arithmetic can't compare).
+W=$(identify -format "%w" "$IMG" 2>/dev/null || echo 0)
+H=$(identify -format "%h" "$IMG" 2>/dev/null || echo 0)
+PIXELS=$((W * H))
+DIMS="${W}x${H}"
+
+# Resolve which model to use. Precedence: --model flag > OC_VISION_MODEL env > auto heuristic.
+PICK="${MODEL_ARG:-${OC_VISION_MODEL:-auto}}"
+case "$PICK" in
+  auto)
+    if   [ "$PIXELS" -lt 500000 ];  then MODEL="$MODEL_8B";   TIER="small (auto: ${PIXELS}px)"
+    elif [ "$PIXELS" -lt 4000000 ]; then MODEL="$MODEL_32B";  TIER="medium (auto: ${PIXELS}px)"
+    else                                 MODEL="$MODEL_235B"; TIER="large (auto: ${PIXELS}px)"
+    fi ;;
+  small)  MODEL="$MODEL_8B";   TIER="small (forced)" ;;
+  medium) MODEL="$MODEL_32B";  TIER="medium (forced)" ;;
+  large)  MODEL="$MODEL_235B"; TIER="large (forced)" ;;
+  */*)    MODEL="$PICK";       TIER="custom: $PICK" ;;
+  *)
+    echo "oc-see: invalid --model: $PICK (expected auto|small|medium|large|<provider/model>)" >&2
+    exit 1 ;;
+esac
+
+TOKENS="${TOKENS_ARG:-${OC_VISION_TOKENS:-1500}}"
+
+if [ "$INSPECT" -eq 1 ]; then
+  printf 'image:    %s\n' "$IMG"
+  printf 'mime:     %s\n' "$MIME"
+  printf 'dims:     %s (%s pixels)\n' "$DIMS" "$PIXELS"
+  printf 'tier:     %s\n' "$TIER"
+  printf 'model:    %s\n' "$MODEL"
+  printf 'tokens:   %s\n' "$TOKENS"
+  exit 0
+fi
+
+KEY=$(jq -r '.openrouter.key // empty' $HOME/.local/share/opencode/auth.json 2>/dev/null)
+if [ -z "$KEY" ]; then
+  echo "oc-see: no openrouter key in ~/.local/share/opencode/auth.json" >&2
+  exit 1
+fi
+
+B64=$(base64 -w0 "$IMG")
+
+PAYLOAD=$(jq -n \
+  --arg model "$MODEL" \
+  --arg prompt "$PROMPT" \
+  --arg mime "$MIME" \
+  --arg b64 "$B64" \
+  --argjson tokens "$TOKENS" \
+  '{
+    model: $model,
+    max_tokens: $tokens,
+    messages: [
+      {role: "user", content: [
+        {type: "text", text: $prompt},
+        {type: "image_url", image_url: {url: ("data:" + $mime + ";base64," + $b64)}}
+      ]}
+    ]
+  }')
+
+RESP=$(curl -sS https://openrouter.ai/api/v1/chat/completions \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d "$PAYLOAD")
+
+TEXT=$(echo "$RESP" | jq -r '.choices[0].message.content // empty')
+if [ -n "$TEXT" ]; then
+  printf '%s\n' "$TEXT"
+else
+  echo "oc-see: error from OpenRouter:" >&2
+  echo "$RESP" | jq '.error // .' >&2
+  exit 1
+fi

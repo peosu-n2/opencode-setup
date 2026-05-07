@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""
+Tiny localhost proxy that exposes safe host-side desktop operations to the
+sandboxed opencode agent. Listens only on 127.0.0.1.
+
+Endpoints:
+    GET /clipboard   → wl-paste image/png from the host clipboard, returns PNG bytes
+                       (404 if clipboard has no image)
+    GET /screenshot  → grim -g $(slurp) — user drags a region, returns PNG bytes
+                       (interactive: prompts user via slurp; 408 on cancel)
+    GET /healthz     → "ok"
+
+The agent reaches this via `curl http://127.0.0.1:7878/clipboard > /tmp/x.png`,
+then delegates to the vision subagent. No Wayland socket bound into the sandbox.
+
+Run as a user systemd service for persistence (see oc-host-proxy.service).
+"""
+import http.server
+import logging
+import socketserver
+import subprocess
+import sys
+
+LOG = logging.getLogger("oc-host-proxy")
+PORT = 7878
+HOST = "127.0.0.1"
+
+
+def run(cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, timeout=timeout)
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, fmt: str, *args) -> None:
+        LOG.info("%s - " + fmt, self.address_string(), *args)
+
+    def _png(self, data: bytes) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _err(self, code: int, msg: str) -> None:
+        self.send_error(code, msg)
+
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path == "/healthz":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"ok\n")
+            return
+
+        if self.path == "/clipboard":
+            try:
+                types = run(["wl-paste", "--list-types"], timeout=5)
+                if b"image/png" not in types.stdout:
+                    self._err(404, "clipboard has no image/png")
+                    return
+                r = run(["wl-paste", "--type", "image/png"], timeout=10)
+                if r.returncode != 0 or not r.stdout:
+                    self._err(500, f"wl-paste failed: {r.stderr.decode()[:200]}")
+                    return
+                self._png(r.stdout)
+            except subprocess.TimeoutExpired:
+                self._err(504, "wl-paste timed out")
+            except FileNotFoundError:
+                self._err(500, "wl-paste not installed on host")
+            return
+
+        if self.path == "/screenshot":
+            try:
+                slurp = run(["slurp"], timeout=120)
+                if slurp.returncode != 0:
+                    self._err(408, "screenshot region selection cancelled")
+                    return
+                region = slurp.stdout.decode().strip()
+                if not region:
+                    self._err(408, "empty region from slurp")
+                    return
+                grim = run(["grim", "-g", region, "-"], timeout=10)
+                if grim.returncode != 0 or not grim.stdout:
+                    self._err(500, f"grim failed: {grim.stderr.decode()[:200]}")
+                    return
+                self._png(grim.stdout)
+            except subprocess.TimeoutExpired:
+                self._err(504, "screenshot tool timed out")
+            except FileNotFoundError as e:
+                self._err(500, f"missing tool: {e.filename}")
+            return
+
+        self._err(404, "unknown endpoint; use /clipboard, /screenshot, /healthz")
+
+
+def main() -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+    LOG.info("listening on http://%s:%d", HOST, PORT)
+    with socketserver.TCPServer((HOST, PORT), Handler) as httpd:
+        httpd.allow_reuse_address = True
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            LOG.info("shutting down")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

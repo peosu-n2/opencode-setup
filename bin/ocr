@@ -1,0 +1,6 @@
+#!/bin/bash
+# Sandboxed `opencode run` with pretty-formatted output.
+# Tool calls and their outputs are dimmed and bracketed; agent text stays bright.
+# For the markdown-rendered version, use `ocr-md`.
+exec $HOME/.config/opencode/oc-sandbox.sh run --format json "$@" \
+  | $HOME/.bin/oc-pretty

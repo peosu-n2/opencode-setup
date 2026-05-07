@@ -1,0 +1,10 @@
+{
+  "name": "oc-tool-formatter",
+  "version": "0.0.1",
+  "description": "Wraps tool outputs in fenced markdown code blocks so the TUI renders them visually distinct from agent text.",
+  "type": "module",
+  "main": "index.ts",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=0.13.7"
+  }
+}
