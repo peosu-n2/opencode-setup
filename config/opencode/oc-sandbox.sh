@@ -122,7 +122,7 @@ exec bwrap \
   --die-with-parent \
   --setenv HOME "$HOME" \
   --setenv USER "$USER" \
-  --setenv PATH "$HOME/.bin:$HOME/.libs/node22/bin:$HOME/.local/npm/bin:$HOME/.pyenv/shims:$HOME/.python-environments/gn/bin:$HOME/Android/Sdk/platform-tools:$HOME/Android/Sdk/emulator:/usr/local/bin:/usr/bin:/bin" \
+  --setenv PATH "$HOME/.bin:$HOME/.libs/node22/bin:$HOME/.local/npm/bin:$HOME/.pyenv/shims:$HOME/Android/Sdk/platform-tools:$HOME/Android/Sdk/emulator:/usr/local/bin:/usr/bin:/bin" \
   --setenv DOCKER_HOST "tcp://127.0.0.1:2375" \
   --setenv DOCKER_BUILDKIT "0" \
   --setenv OC_HOST_PROXY "http://127.0.0.1:7878" \

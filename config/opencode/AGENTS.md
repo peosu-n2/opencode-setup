@@ -12,11 +12,11 @@
 3. **Prevent common mistakes** - use jq/yq instead of manual JSON/YAML edits
 
 ## Essential Tools (inventory)
-Available: `dasel`, `jq`, `yq`, `sd`, `rg`, `fd`, `bat`, `xh`, `curl`, `tidy`, `python-project`. Healthcare: `cq`, `dq`, `ms`, `mt`. Office: `word2txt`, `docx-search`, `excel2csv`. Usage examples and full custom-utility list in `tool-patterns.md` — read it on demand, not preemptively.
+Available: `dasel`, `jq`, `yq`, `sd`, `rg`, `fd`, `bat`, `xh`, `curl`, `tidy`. Add any project-specific custom utilities to `tool-patterns.md` and reference them on demand.
 
 ## Common Mistake Prevention Rules
 1. **NEVER edit JSON/YAML files manually** - Use `jq` or `yq` commands
-2. **NEVER use `python` or `python3` directly** - Use `python-project` for correct environment
+2. **NEVER use bare `python`/`python3`** - Activate the project venv first (or use a project-specific wrapper like `python-project`)
 3. **ALWAYS check Docker status** before running Docker commands
 4. **ALWAYS preview Git changes** before committing
 5. **USE project-specific commands** from `package.json`/`pyproject.toml`
@@ -26,11 +26,10 @@ Available: `dasel`, `jq`, `yq`, `sd`, `rg`, `fd`, `bat`, `xh`, `curl`, `tidy`, `
 9. **NEVER use `cat` for file viewing** - Use `bat` (syntax highlighting, line numbers)
 10. **CONSIDER `dasel` for multi-format configs** - Use jq for JSON, yq for YAML, dasel for cross-format operations
 
-## Python install rule (load-bearing)
-- **ALWAYS** install Python packages with `python-project -m pip install <pkg>` — never bare `pip install` or `pip3 install`.
-- `python-project` resolves to the correct env per `~/.config/opencode/python-environments.json`. The default for unmapped directories is `gn` (general env: pandas, openpyxl, python-docx). Mapped paths (e.g., `/some-project/sub*` → `sub-env`) use their project env.
-- Same rule for running Python: `python-project script.py` and `python-project -m pytest`, never bare `python`/`python3`.
-- This means scratch installs land in `gn` — a known, shared env — instead of polluting the system Python or creating ad-hoc venvs. Re-run `detect-python-env --json` if you're unsure which env is active.
+## Python environment rule
+- **ALWAYS** install/run Python through the project venv or a project-aware wrapper, never bare `python`/`pip`.
+- If you have a tool like `python-project` (a wrapper that resolves the right env per directory), document it here and require its use. Otherwise: `source .venv/bin/activate` first, or use `uv run`/`poetry run`/etc.
+- Goal: scratch installs go into a known env, not the system Python and not ad-hoc temp venvs.
 
 
 ## Project Entry Checklist
@@ -38,25 +37,26 @@ When entering a new project directory:
 1. Check `tool-patterns.md` for available tools and patterns
 2. Detect project type: `package.json` (Node), `pyproject.toml` (Python), etc.
 3. Use project-specific commands (e.g., `npm test` for Node, `pytest` for Python)
-4. Reference healthcare utilities if in healthcare project
-5. **Check for project-specific agent configuration** (e.g., `PROJECT_AGENT.md`, `.opencode/` directory) for deployment and environment guidelines
+4. **Check for project-specific agent configuration** (e.g., `PROJECT_AGENT.md`, `.opencode/` directory) for deployment and environment guidelines
 
 
 ---
 
 ## Model-Specific Rules
 
-### When using `deepseek-reasoner` (plan, reviewer)
-- The chain-of-thought is internal — do **not** include `<think>` blocks or raw reasoning in the final answer.
-- `temperature` is ignored by this model; don't bother tuning it.
-- Prefer **one concrete plan** over exploring multiple branches.
-- For any file edit, hand off to the `build` agent — reasoner is read-only by config.
-- Budget: 64K input, up to 64K output. For large codebases, summarize aggressively before quoting.
+### When using V4 Pro thinking (plan, reviewer, debug)
+- Chain-of-thought stays internal — do **not** include `<think>` blocks or raw reasoning in the final answer.
+- `temperature` is ignored when thinking is on; don't bother tuning it.
+- Prefer **one concrete plan** over exploring multiple branches in the output.
+- For file edits, hand off to a non-thinking agent — reasoning agents should produce specs, not patches.
 
-### When using `deepseek-chat` (build, researcher)
+### When using V4 Flash non-thinking (build, ship, researcher)
 - `temperature: 0` for code, tests, refactors. Raise only for brainstorming.
-- Output cap is 8K tokens max — for large generations, split into multiple turns.
 - Supports tool/function calling — use tools eagerly instead of guessing.
+
+### When using V4 Pro non-thinking (build-pro)
+- `temperature: 0.3` — slight variability helps strategic reasoning explore alternatives.
+- Do the architectural thinking yourself; delegate mechanical edits to the executor (`build`).
 
 ### Agent routing
 - `/agent build` (default) → implementation, edits, running tests. Fast loop on `deepseek-chat`. Auto-invokes `plan` subagent for complex tasks.
