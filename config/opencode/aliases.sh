@@ -7,7 +7,7 @@ alias dclogs='docker-compose logs -f'
 alias dcrestart='docker-compose restart'
 
 # Database connections (update with your actual databases)
-# alias pgjna='psql postgresql://localhost/jna'
+# alias pgproj='psql postgresql://localhost/your_db'
 # alias pgsuperset='psql postgresql://localhost/superset'
 
 # Opencode wrappers live in ~/.bin as standalone scripts (oc, ocr, ocrg).

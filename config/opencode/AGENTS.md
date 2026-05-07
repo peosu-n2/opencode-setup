@@ -28,7 +28,7 @@ Available: `dasel`, `jq`, `yq`, `sd`, `rg`, `fd`, `bat`, `xh`, `curl`, `tidy`, `
 
 ## Python install rule (load-bearing)
 - **ALWAYS** install Python packages with `python-project -m pip install <pkg>` — never bare `pip install` or `pip3 install`.
-- `python-project` resolves to the correct env per `~/.config/opencode/python-environments.json`. The default for unmapped directories is `gn` (general env: pandas, openpyxl, python-docx). Mapped paths (e.g., `/jna/cht*` → `cht`) use their project env.
+- `python-project` resolves to the correct env per `~/.config/opencode/python-environments.json`. The default for unmapped directories is `gn` (general env: pandas, openpyxl, python-docx). Mapped paths (e.g., `/some-project/sub*` → `sub-env`) use their project env.
 - Same rule for running Python: `python-project script.py` and `python-project -m pytest`, never bare `python`/`python3`.
 - This means scratch installs land in `gn` — a known, shared env — instead of polluting the system Python or creating ad-hoc venvs. Re-run `detect-python-env --json` if you're unsure which env is active.
 

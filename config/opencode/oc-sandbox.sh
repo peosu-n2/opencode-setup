@@ -3,7 +3,7 @@
 #
 # Visible read-write inside:
 #   - $PWD
-#   - ~/projects (covers ~/projects/jna and siblings)
+#   - ~/projects (your work tree root)
 #   - ~/Desktop
 #   - ~/.bin (for quick script edits)
 #   - opencode config + data + cache + state dirs
