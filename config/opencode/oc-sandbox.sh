@@ -36,7 +36,8 @@
 set -euo pipefail
 
 # System tools first: folders the sandbox can write (~/.local/npm, ~/.opencode) may be on the
-# host's PATH too, and must not supply the jq, gh or bwrap this script runs
+# host's PATH too, and must not supply the jq, gh or bwrap this script runs.
+USER_PATH="$PATH"  # the agent itself is found on the user's own PATH (below)
 PATH="/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
 
 OC_DIR=$HOME/.config/opencode
@@ -44,7 +45,9 @@ PWD_ABS=$(realpath "$PWD")
 
 # Resolve the opencode binary at run-time so the same script works across machines
 # (don't hardcode an install-specific path like $HOME/.libs/node22/bin/opencode).
-OPENCODE_BIN=$(command -v opencode 2>/dev/null) || OPENCODE_BIN=""
+# The agent runs inside the sandbox, so it comes from the user's PATH as before (a
+# ~/.opencode/bin or ~/.local/bin install over an older system package)
+OPENCODE_BIN=$(PATH="$USER_PATH" command -v opencode 2>/dev/null) || OPENCODE_BIN=""
 [ -n "$OPENCODE_BIN" ] || {
   echo "oc-sandbox: 'opencode' not found in PATH. Install via: curl -fsSL https://opencode.ai/install | bash" >&2
   exit 1
