@@ -38,11 +38,16 @@ Then populate secrets (the install script prints these too):
 ## Architecture
 
 - **`oc-sandbox.sh`** — bwrap-based sandbox launcher. Mounts a tmpfs over
-  `$HOME`, then RW-binds only the directories the agent needs (~/.bin,
-  ~/projects, ~/Desktop, opencode dirs) and RO-binds read-only paths (~/.ssh,
-  ~/.gitconfig, ~/.docker, ~/.config/gh).
-- **`oc-host-proxy`** — small HTTP service on `:7878` exposing clipboard and
-  screenshot to the sandboxed agent (without giving it Wayland access).
+  `$HOME`, then RW-binds only the directories the agent needs (~/projects,
+  ~/Desktop, opencode dirs) and RO-binds read-only paths (~/.bin, ~/.ssh,
+  ~/.gitconfig, ~/.docker, ~/.config/gh). `~/.bin` and the launcher scripts are
+  read-only because the host runs them: an agent that could edit them could run
+  code outside the sandbox. Edit them outside the sandbox.
+- **`oc-host-proxy`** — small HTTP service on `127.0.0.1:7878` exposing clipboard
+  and screenshot to the sandboxed agent (without giving it Wayland access), and
+  speech for the voice tools (`GET /speak-on`, `POST /speak`, which hand the job
+  to `~/.bin/voice/claude-speak` when it is installed). Requests must name a
+  loopback Host, so a web page can't reach it through DNS rebinding.
 - **`oc-docker-proxy`** — Tecnativa docker-socket-proxy on `127.0.0.1:2375`,
   filtered to allow build/push/inspect but deny run/exec/login.
 

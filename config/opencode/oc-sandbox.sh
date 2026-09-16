@@ -5,12 +5,13 @@
 #   - $PWD
 #   - ~/projects (your work tree root)
 #   - ~/Desktop
-#   - ~/.bin (for quick script edits)
 #   - opencode config + data + cache + state dirs
 #   - ~/.android (adbkey, AVDs, debug.keystore — adb auth + emulator state)
 #   - ~/.gradle (build cache + daemon — avoids re-downloading on every build)
 #   - ~/.m2 (Maven local repo, used by Gradle for mavenLocal())
 # Visible read-only inside:
+#   - ~/.bin, and this script and aliases.sh in the opencode config dir: the host runs
+#     them (see HOST_RUN), so edit them outside the sandbox
 #   - /usr, /etc, /opt, ~/.libs
 #   - ~/.ssh (for git push via SSH)
 #   - ~/.gitconfig
@@ -33,6 +34,10 @@
 # Usage: oc-sandbox.sh run --agent ship "your prompt"
 #        oc-sandbox.sh                                 # interactive TUI in $PWD
 set -euo pipefail
+
+# System tools first: folders the sandbox can write (~/.local/npm, ~/.opencode) may be on the
+# host's PATH too, and must not supply the jq, gh or bwrap this script runs
+PATH="/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
 
 OC_DIR=$HOME/.config/opencode
 PWD_ABS=$(realpath "$PWD")
@@ -60,6 +65,8 @@ esac
 # Otherwise add it so $PWD is RW inside the sandbox.
 if [ "$PWD_ABS" = "$HOME" ]; then
   PWD_BIND=()
+elif [[ "$PWD_ABS" == "$HOME/.bin" || "$PWD_ABS" == "$HOME/.bin/"* ]]; then
+  PWD_BIND=()  # ~/.bin is visible read-only (see HOST_RUN); a writable bind would undo that
 else
   PWD_BIND=(--bind "$PWD_ABS" "$PWD_ABS")
 fi
@@ -79,6 +86,17 @@ if command -v gh >/dev/null 2>&1; then
   fi
 fi
 
+# The host runs what's in ~/.bin: it is usually first on the host's PATH, shells may source
+# files from it, and it holds the launchers (oc, ocr), oc-host-proxy and whatever the proxy
+# starts (POST /speak runs ~/.bin/voice/claude-speak). An agent able to edit any of it could
+# run code outside the sandbox, so ~/.bin is bound read-only, and so are the launcher scripts
+# in the writable opencode config dir. They are bound after $PWD, and a $PWD inside ~/.bin
+# isn't bound writable, so this holds whichever folder the agent starts in.
+HOST_RUN=()
+for path in "$HOME/.config/opencode/oc-sandbox.sh" "$HOME/.config/opencode/aliases.sh"; do
+  if [ -e "$path" ]; then HOST_RUN+=(--ro-bind "$path" "$path"); fi
+done
+
 exec bwrap \
   --ro-bind /usr /usr \
   --symlink usr/bin /bin \
@@ -90,7 +108,7 @@ exec bwrap \
   --ro-bind-try /opt /opt \
   --tmpfs "$HOME" \
   --ro-bind "$HOME/.libs" "$HOME/.libs" \
-  --bind "$HOME/.bin" "$HOME/.bin" \
+  --ro-bind "$HOME/.bin" "$HOME/.bin" \
   --bind-try "$HOME/.opencode" "$HOME/.opencode" \
   --bind "$HOME/.config/opencode" "$HOME/.config/opencode" \
   --ro-bind "$HOME/.config/opencode/config.sandbox.json" "$HOME/.config/opencode/config.json" \
@@ -112,6 +130,7 @@ exec bwrap \
   --bind-try "$HOME/.local/npm" "$HOME/.local/npm" \
   --tmpfs /tmp \
   ${PWD_BIND[@]+"${PWD_BIND[@]}"} \
+  ${HOST_RUN[@]+"${HOST_RUN[@]}"} \
   ${GH_TOKEN_ENV[@]+"${GH_TOKEN_ENV[@]}"} \
   --proc /proc \
   --dev /dev \
