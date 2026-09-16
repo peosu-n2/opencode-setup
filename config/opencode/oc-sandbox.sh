@@ -35,8 +35,8 @@
 #        oc-sandbox.sh                                 # interactive TUI in $PWD
 set -euo pipefail
 
-# System tools first: folders the sandbox can write (~/.local/npm, ~/.opencode) may be on the
-# host's PATH too, and must not supply the jq, gh or bwrap this script runs.
+# System tools first: the user's own folders on the host's PATH (~/.local/npm/bin,
+# ~/.opencode/bin) must not supply the jq, gh or bwrap this script runs.
 USER_PATH="$PATH"  # the agent itself is found on the user's own PATH (below)
 PATH="/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
 
@@ -93,10 +93,14 @@ fi
 # files from it, and it holds the launchers (oc, ocr), oc-host-proxy and whatever the proxy
 # starts (POST /speak runs ~/.bin/voice/claude-speak). An agent able to edit any of it could
 # run code outside the sandbox, so ~/.bin is bound read-only, and so are the launcher scripts
-# in the writable opencode config dir. They are bound after $PWD, and a $PWD inside ~/.bin
-# isn't bound writable, so this holds whichever folder the agent starts in.
+# in the writable opencode config dir. The host may also run the global npm tools and the
+# opencode binary, so ~/.local/npm (its bin entries are links into its lib) and ~/.opencode/bin
+# are read-only as well: they can't be installed or updated from inside the sandbox. All of
+# these are bound after $PWD, and a $PWD inside ~/.bin isn't bound writable, so this holds
+# whichever folder the agent starts in.
 HOST_RUN=()
-for path in "$HOME/.config/opencode/oc-sandbox.sh" "$HOME/.config/opencode/aliases.sh"; do
+for path in "$HOME/.config/opencode/oc-sandbox.sh" "$HOME/.config/opencode/aliases.sh" \
+            "$HOME/.local/npm" "$HOME/.opencode/bin"; do
   if [ -e "$path" ]; then HOST_RUN+=(--ro-bind "$path" "$path"); fi
 done
 

@@ -40,9 +40,10 @@ Then populate secrets (the install script prints these too):
 - **`oc-sandbox.sh`** — bwrap-based sandbox launcher. Mounts a tmpfs over
   `$HOME`, then RW-binds only the directories the agent needs (~/projects,
   ~/Desktop, opencode dirs) and RO-binds read-only paths (~/.bin, ~/.ssh,
-  ~/.gitconfig, ~/.docker, ~/.config/gh). `~/.bin` and the launcher scripts are
-  read-only because the host runs them: an agent that could edit them could run
-  code outside the sandbox. Edit them outside the sandbox.
+  ~/.gitconfig, ~/.docker, ~/.config/gh). `~/.bin`, the launcher scripts, the
+  global npm tools (`~/.local/npm`) and the opencode binary (`~/.opencode/bin`)
+  are read-only because the host runs them: an agent that could edit them could
+  run code outside the sandbox. Edit, install or update them outside the sandbox.
 - **`oc-host-proxy`** — small HTTP service on `127.0.0.1:7878` exposing clipboard
   and screenshot to the sandboxed agent (without giving it Wayland access), and
   speech for the voice tools (`GET /speak-on`, `POST /speak`, which hand the job
